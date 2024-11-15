@@ -1,0 +1,55 @@
+version: '3.9'
+
+services:
+  wait-services:
+    image: jwilder/dockerize
+    command: >
+      dockerize
+        -wait tcp://fastapi_db:5432
+    depends_on:
+      - fastapi_db
+
+  web:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: fastapi_app
+    volumes:
+      - ./:/src/
+    ports:
+      - "8000:8000"
+    depends_on:
+      - fastapi_db
+    env_file:
+      - .env
+    command: uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload --log-level info
+    networks:
+      - fastapi_network
+
+  fastapi_db:
+    image: postgres:15
+    container_name: fastapi_db
+
+    environment:
+      POSTGRES_USER: ${DATABASE_USER}
+      POSTGRES_PASSWORD: ${DATABASE_PASSWORD}
+      POSTGRES_DB: ${DATABASE_NAME}
+    command:
+      [
+        "sh", "-c",
+        "exec docker-entrypoint.sh postgres -c log_statement=all -c log_destination=stderr && psql -U DATABASE_USER -c 'CREATE DATABASE fastapi_db;'"
+      ]
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    networks:
+      - fastapi_network
+
+volumes:
+  postgres_data:
+
+
+networks:
+  fastapi_network:
+    driver: bridge
